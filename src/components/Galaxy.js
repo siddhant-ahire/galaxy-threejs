@@ -4,8 +4,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 const GalaxyBackground = () => {
     const mountRef = useRef(null);
-    const objectsClickable = useRef([]);  // Ref to store clickable objects
-    const [rotationEnabled, setRotationEnabled] = useState(true);  // State to control rotation
+    const objectsClickable = useRef([]);
+    const [rotationEnabled, setRotationEnabled] = useState(true);
+    const [rotationSpeed, setRotationSpeed] = useState(0.005);  // Initial speed for Earth orbit
 
     useEffect(() => {
         const scene = new THREE.Scene();
@@ -19,35 +20,27 @@ const GalaxyBackground = () => {
 
         const onDocumentMouseMove = event => {
             event.preventDefault();
-
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(objectsClickable.current);
-
             document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
         };
 
         const onDocumentMouseDown = event => {
             event.preventDefault();
-
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(objectsClickable.current);
-
             if (intersects.length > 0) {
                 console.log(`Clicked on: ${intersects[0].object.name}`);
-                setRotationEnabled(!rotationEnabled);  // Toggle rotation on click
             }
         };
 
         document.addEventListener('mousemove', onDocumentMouseMove, false);
         document.addEventListener('mousedown', onDocumentMouseDown, false);
 
-        const loader = new THREE.TextureLoader();
         const starsGeometry = new THREE.BufferGeometry();
         const starsMaterial = new THREE.PointsMaterial({
             color: 0xffffff,
@@ -67,7 +60,7 @@ const GalaxyBackground = () => {
 
         const sunGeometry = new THREE.SphereGeometry(1.2, 32, 32);
         const sunMaterial = new THREE.MeshBasicMaterial({
-            map: loader.load('sun_texture.jpeg'),  // Ensure correct texture path
+            map: new THREE.TextureLoader().load('sun_texture.jpeg'),  // Ensure correct texture path
             emissive: 0xFFFF00,
             emissiveIntensity: 1
         });
@@ -87,9 +80,9 @@ const GalaxyBackground = () => {
 
         const earthGeometry = new THREE.SphereGeometry(0.5, 32, 32);
         const earthMaterial = new THREE.MeshPhongMaterial({
-            map: loader.load('earthmap1k.jpeg'),  // Ensure correct texture path
-            specularMap: loader.load('earthspec1k.jpeg'),
-            normalMap: loader.load('earth_normalmap_flat.jpeg'),
+            map: new THREE.TextureLoader().load('earthmap1k.jpeg'),  // Ensure correct texture path
+            specularMap: new THREE.TextureLoader().load('earthspec1k.jpeg'),
+            normalMap: new THREE.TextureLoader().load('earth_normalmap_flat.jpeg'),
             normalScale: new THREE.Vector2(0.5, 0.5),
             shininess: 10
         });
@@ -99,18 +92,26 @@ const GalaxyBackground = () => {
         earthOrbit.add(earth);
         objectsClickable.current.push(earth);
 
+        const earthLight = new THREE.PointLight(0x4B92DC, 1.5, 100);
+        earthLight.position.set(5, 0, 10);  // Position slightly away from the Earth to simulate sunlight
+        scene.add(earthLight);
+
         const moonOrbit = new THREE.Object3D();
         earth.add(moonOrbit);
 
         const moonGeometry = new THREE.SphereGeometry(0.14, 32, 32);
         const moonMaterial = new THREE.MeshPhongMaterial({
-            map: loader.load('moonmap1k.jpeg')  // Ensure correct texture path
+            map: new THREE.TextureLoader().load('moonmap1k.jpeg')  // Ensure correct texture path
         });
         const moon = new THREE.Mesh(moonGeometry, moonMaterial);
         moon.position.set(1, 0, 0);
         moon.name = 'Moon';
         moonOrbit.add(moon);
         objectsClickable.current.push(moon);
+
+        const moonLight = new THREE.PointLight(0x888888, 0.5, 50);
+        moonLight.position.set(6, 0, 1);  // Position slightly away from the Moon
+        scene.add(moonLight);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
@@ -120,21 +121,18 @@ const GalaxyBackground = () => {
         controls.enablePan = true;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-
         camera.position.set(10, 5, 10);
 
         const animate = () => {
             requestAnimationFrame(animate);
-
             if (rotationEnabled) {
-                earthOrbit.rotateY(0.005);  // Rotate Earth orbit if rotation is enabled
-                moonOrbit.rotateY(0.01);    // Rotate Moon orbit if rotation is enabled
+                // Adjust rotation based on speed state
+                earthOrbit.rotateY(rotationSpeed);
+                moonOrbit.rotateY(rotationSpeed * 2);  // Moon rotates faster
             }
-
             controls.update();
             renderer.render(scene, camera);
         };
-
         animate();
 
         return () => {
@@ -142,9 +140,73 @@ const GalaxyBackground = () => {
             document.removeEventListener('mousedown', onDocumentMouseDown);
             mountRef.current.removeChild(renderer.domElement);
         };
-    }, [rotationEnabled]);  // Re-run the effect when rotationEnabled changes
+    }, [rotationEnabled, rotationSpeed]);  // Depend on rotationSpeed as well
 
-    return <div ref={mountRef} style={{ width: '100%', height: '100%' }}></div>;
+    return (
+        <div ref={mountRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <button
+                style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                }}
+                onClick={() => setRotationEnabled(!rotationEnabled)}
+            >
+                {rotationEnabled ? 'Stop Rotation' : 'Start Rotation'}
+            </button>
+            <button
+                style={{
+                    position: 'absolute',
+                    top: '50px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                }}
+                onClick={() => setRotationSpeed(rotationSpeed + 0.001)}
+            >
+                Faster
+            </button>
+            <button 
+                style={{
+                    position: 'absolute',
+                    top: '70px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                }}
+            >{(parseInt(rotationSpeed.toFixed(3)*1000))}</button>
+            <button
+                style={{
+                    position: 'absolute',
+                    top: '90px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                }}
+                onClick={() => setRotationSpeed(Math.max(0, rotationSpeed - 0.001))}
+            >
+                Slower
+            </button>
+        </div>
+    );
 };
 
 export default GalaxyBackground;
